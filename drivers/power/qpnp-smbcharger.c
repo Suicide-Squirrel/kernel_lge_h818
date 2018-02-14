@@ -4562,6 +4562,7 @@ static int otg_oc_reset(struct smbchg_chip *chip)
 
 	msleep(20);
 
+#ifndef CONFIG_LGE_PM_OTG
 	/*
 	 * There is a possibility that an USBID interrupt might have
 	 * occurred notifying USB power supply to disable OTG. We
@@ -4572,13 +4573,16 @@ static int otg_oc_reset(struct smbchg_chip *chip)
 			"OTG is not present, not enabling OTG_EN_BIT\n");
 		goto out;
 	}
+#endif
 
 	rc = smbchg_masked_write(chip, chip->bat_if_base + CMD_CHG_REG,
 						OTG_EN_BIT, OTG_EN_BIT);
 	if (rc)
 		pr_err("Failed to re-enable OTG rc=%d\n", rc);
 
+#ifndef CONFIG_LGE_PM_OTG
 out:
+#endif
 	return rc;
 }
 
@@ -5605,6 +5609,10 @@ static irqreturn_t aicl_done_handler(int irq, void *_chip)
 	struct smbchg_chip *chip = _chip;
 	bool usb_present = is_usb_present(chip);
 	int aicl_level = smbchg_get_aicl_level_ma(chip);
+#ifdef CONFIG_LGE_PM_SMB_DEBUG
+	int rc;
+	union power_supply_propval val = {0,};
+#endif
 
 	pr_smb(PR_INTERRUPT, "triggered, aicl: %d\n", aicl_level);
 
@@ -5613,21 +5621,27 @@ static irqreturn_t aicl_done_handler(int irq, void *_chip)
 	if (usb_present)
 		smbchg_parallel_usb_check_ok(chip);
 
-#ifdef CONFIG_LGE_PM_AICL
+#ifdef CONFIG_LGE_PM_SMB_DEBUG
 	if (chip->aicl_complete) {
 		rc = smbchg_battery_get_property(&chip->batt_psy,
-					POWER_SUPPLY_PROP_INPUT_CURRENT_TRIM, &val);
-#ifdef CONFIG_LGE_PM_SMB_DEBUG
+				POWER_SUPPLY_PROP_INPUT_CURRENT_MAX, &val);
+#ifdef CONFIG_LGE_PM_AICL
 		pr_smb(PR_LGE, "aicl_current[%d], aicl_status[%d]\n",
 				val.intval, aicl_status);
 #endif
+#ifdef CONFIG_LGE_PM_VZW_REQ
+		pr_smb(PR_LGE, "aicl_current[%d]\n",
+				val.intval);
+#endif
+#endif
+#ifdef CONFIG_LGE_PM_AICL
 		if (aicl_rerun && (aicl_status == AICL_RERUN)) {
 			aicl_status = AICL_ENABLE;
 			schedule_delayed_work(&chip->aicl_work,
-						msecs_to_jiffies(AICL_RERUN_TIME));
-				}
-	}
+					msecs_to_jiffies(AICL_RERUN_TIME));
+		}
 #endif
+	}
 	chip->aicl_complete = smbchg_is_aicl_complete(chip);
 
 	if (chip->aicl_complete)

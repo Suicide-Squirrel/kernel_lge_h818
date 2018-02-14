@@ -274,7 +274,9 @@ struct charger_contr {
 
 	int current_usb_psy;
 	int current_wireless_psy;
-
+#ifdef CONFIG_LGE_PM_VZW_REQ
+	int wireless_init_current;
+#endif
 	int batt_temp_state;
 	int batt_volt_state;
 	int charge_type;
@@ -760,6 +762,28 @@ static int charger_contr_get_battery_temperature(void)
 #endif
 }
 
+
+/* [LGE_UPDATE_S] */
+int lge_get_batt_temp(void)
+{
+   union power_supply_propval val = {0,};
+   int rc = 0;
+
+   rc = cc_psy_getprop(batt_psy, TEMP, &val);
+
+   if (!rc) {
+		pr_cc(PR_DEBUG, "battery temp =%d\n", val.intval);
+		return val.intval;
+   }
+   else
+		return CHARGER_CONTROLLER_BATTERY_DEFAULT_TEMP;
+}
+
+EXPORT_SYMBOL_GPL(lge_get_batt_temp);
+/* [LGE_UPDATE_E] */
+
+
+
 void update_thermal_condition(int state_changed)
 {
 	int ibat_limit_lcs;
@@ -838,10 +862,19 @@ static int update_pm_psy_status(int requester)
 
 	cc_psy_getprop(wireless_psy, PRESENT, &val);
 	chgr_contr->wlc_online = val.intval;
+
 	if (chgr_contr->wlc_online) {
+#ifdef CONFIG_LGE_PM_VZW_REQ
+		chgr_contr->current_wireless_psy
+			= chgr_contr->wireless_init_current;
+	chgr_contr->vzw_chg_mode = VZW_NORMAL_CHARGING;
+#endif
 		chgr_contr->is_wireless = 1;
 	} else {
 		chgr_contr->is_wireless = 0;
+#ifdef CONFIG_LGE_PM_VZW_REQ
+		chgr_contr->current_wireless_psy = 0;
+#endif
 	}
 
 	cc_psy_getprop(usb_psy, ONLINE, &val);
@@ -851,7 +884,16 @@ static int update_pm_psy_status(int requester)
 			chgr_contr->usb_online, val.intval);
 
 	chgr_contr->usb_online = val.intval;
+#ifdef CONFIG_LGE_PM_VZW_REQ
 	if (chgr_contr->usb_online) {
+		chgr_contr->is_usb = 1;
+	} else {
+		chgr_contr->is_usb = 0;
+	}
+	if (chgr_contr->usb_online||chgr_contr->is_wireless) {
+#else
+	if (chgr_contr->usb_online) {
+#endif
 		cc_psy_getprop(usb_psy, CURRENT_MAX, &val);
 		if (val.intval &&
 			chgr_contr->current_usb_psy != val.intval/1000) {
@@ -859,13 +901,17 @@ static int update_pm_psy_status(int requester)
 				val.intval/1000);
 			chgr_contr->current_usb_psy = val.intval/1000;
 #ifdef CONFIG_LGE_PM_VZW_REQ
-		chgr_contr->vzw_chg_mode = VZW_NORMAL_CHARGING;
+			chgr_contr->vzw_chg_mode = VZW_NORMAL_CHARGING;
 #endif
 		}
+#ifndef CONFIG_LGE_PM_VZW_REQ
 		chgr_contr->is_usb = 1;
+#endif
 	} else {
 		chgr_contr->current_usb_psy = 0;
+#ifndef CONFIG_LGE_PM_VZW_REQ
 		chgr_contr->is_usb = 0;
+#endif
 #ifdef CONFIG_LGE_PM_QC20_SCENARIO
 		chgr_contr->qc20.is_qc20 = 0;
 		chgr_contr->qc20.is_highvol= 0;
@@ -1373,9 +1419,10 @@ void changed_by_batt_psy(void)
 	vzw_aicl_complete = val.intval;
 #endif
 	if (val.intval) {
-		cc_psy_getprop(batt_psy, INPUT_CURRENT_TRIM, &val);
-		chgr_contr->aicl_done_current = val.intval;
-		pr_cc(PR_INFO, "aicl_done_current = %d\n", val.intval);
+		cc_psy_getprop(batt_psy, INPUT_CURRENT_MAX, &val);
+		chgr_contr->aicl_done_current = val.intval / 1000;
+		pr_cc(PR_INFO, "aicl_done_current = %d\n",
+				chgr_contr->aicl_done_current);
 	}
 #ifdef CONFIG_LGE_PM_VZW_REQ
 	/*floated charger detect*/
@@ -1392,9 +1439,13 @@ void changed_by_batt_psy(void)
 				chgr_contr->usb_psy->is_floated_charger);
 		}
 	}
+
+	pr_cc(PR_INFO, "QC2.0 check for VZW REQ...Pre state = (%d)\n",
+			chgr_contr->qc20.is_qc20);
 	/* Under current charger and normal charger detect */
 	if (vzw_aicl_complete) {
-		if (chgr_contr->aicl_done_current <= VZW_CHG_MIN_CURRENT) {
+		if (chgr_contr->aicl_done_current <= VZW_CHG_MIN_CURRENT
+				&& chgr_contr->qc20.is_qc20 == 0) {
 			chgr_contr->vzw_under_current_count++;
 			/* Occasionally, once the code below taken to correct the error value is 300 AICL Done. */
 			/* VZW_SLOW_CHARGER_MAX_COUNT : The approximate time when 400mA charge*/
@@ -2529,6 +2580,9 @@ if (cc->wireless_psy != NULL) {
 		if (val.intval) {
 			pr_info("[ChargerController] Present wireless current =%d\n", val.intval/1000);
 			cc->current_wireless_psy = val.intval/1000;
+#ifdef CONFIG_LGE_PM_VZW_REQ
+			cc->wireless_init_current = cc->current_wireless_psy;
+#endif
 		}
 	}
 

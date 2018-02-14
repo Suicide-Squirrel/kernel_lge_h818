@@ -5154,6 +5154,8 @@ static ssize_t show_fw_change_re_lpwg_cal_result(struct i2c_client *client,
 	}
 
 result_print:
+	mutex_unlock(&ts->pdata->thread_lock);
+
 	ret = snprintf(buf, PAGE_SIZE, "========RESULT=======\n");
 	ret += snprintf(buf + ret, PAGE_SIZE - ret,
 			"Result : %s\n\n", (panel_info & fw_check) ? "OK" : "NG");
@@ -6759,8 +6761,7 @@ enum error_type synaptics_ts_get_data(struct i2c_client *client,
 				get_tci_data(ts, ts->pw_data.tap_count);
 				wake_lock(&ts->timer_wake_lock);
 				queue_delayed_work(touch_wq, &ts->work_timer,
-						msecs_to_jiffies(UEVENT_DELAY
-							- I2C_DELAY));
+						msecs_to_jiffies(0));
 			}
 		} else if ((ts->swipe.support_swipe)
 				&& (status & ts->swipe.gesture_mask)) {

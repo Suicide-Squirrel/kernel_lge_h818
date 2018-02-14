@@ -29,6 +29,10 @@
 #include "lge/panel/oem_mdss_dsi_common.h"
 #endif
 
+#ifdef CONFIG_MACH_LGE
+#include <soc/qcom/lge/board_lge.h>
+#endif
+
 #if defined (CONFIG_LGE_DISPLAY_TUNING) || defined(CONFIG_LGE_DISPLAY_DUAL_BACKLIGHT)
 struct mdss_panel_data *pdata_base;
 #endif
@@ -1401,6 +1405,15 @@ static int mdss_dsi_parse_panel_features(struct device_node *np,
 		"qcom,suspend-ulps-enabled");
 	pr_info("%s: ulps during suspend feature %s", __func__,
 		(pinfo->ulps_suspend_enabled ? "enabled" : "disabled"));
+
+#if defined(CONFIG_LGE_MIPI_P1_INCELL_QHD_CMD_PANEL)
+	if(lge_get_panel() == JDI_INCELL_CMD_PANEL) {
+		if (lge_get_boot_mode() == LGE_BOOT_MODE_CHARGERLOGO) {
+			pinfo->ulps_suspend_enabled = true;
+			pr_info("%s:enter chargerlogo, ulps during suspend feature %s\n", __func__, "enabled");
+		}
+	}
+#endif
 
 	mdss_dsi_parse_dms_config(np, ctrl);
 

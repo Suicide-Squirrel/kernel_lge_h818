@@ -37,7 +37,6 @@
 #include <linux/poll.h>
 #include <linux/version.h>
 #include <linux/of_gpio.h>
-#include <soc/qcom/lge/board_lge.h>
 
 #include <linux/nfc/bcm2079x.h>
 #include <linux/wakelock.h>
@@ -666,11 +665,7 @@ static int bcm2079x_probe(struct i2c_client *client,
 
     gpio_set_value(platform_data.en_gpio, 0);
     msleep(50);
-    if (lge_get_boot_mode() == LGE_BOOT_MODE_NORMAL){
-        gpio_set_value(platform_data.en_gpio, 1);
-    }else{
-        gpio_set_value(platform_data.en_gpio, 0);
-    }
+    gpio_set_value(platform_data.en_gpio, 0);
     gpio_set_value(platform_data.wake_gpio, 0);
 #endif /*End of BCM2079X_MTK_PLATFORM*/
 

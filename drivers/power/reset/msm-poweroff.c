@@ -71,7 +71,7 @@ static void *emergency_dload_mode_addr;
 static bool scm_dload_supported;
 
 static int dload_set(const char *val, struct kernel_param *kp);
-static int download_mode = 1;
+static int download_mode = 0;
 module_param_call(download_mode, dload_set, param_get_int,
 			&download_mode, 0644);
 static int panic_prep_restart(struct notifier_block *this,
@@ -432,12 +432,7 @@ static void do_msm_poweroff(void)
 #ifdef CONFIG_MSM_DLOAD_MODE
 	set_dload_mode(0);
 #endif
-
-#if defined(CONFIG_MACH_LGE)
-	qpnp_pon_system_pwr_off(PON_POWER_OFF_DVDD_SHUTDOWN);
-#else
 	qpnp_pon_system_pwr_off(PON_POWER_OFF_SHUTDOWN);
-#endif
 	/* Needed to bypass debug image on some chips */
 	if (!is_scm_armv8())
 		ret = scm_call_atomic2(SCM_SVC_BOOT,
